@@ -69,3 +69,7 @@ The PAK contains 13 entries. Each entry matches an existing Mac resource path an
 On macOS 27.2.1 with a Bluetooth DualSense, a gameplay test with F8 off confirmed resistance on both triggers that changed with the equipped weapon. The trace showed the handgun's retuned L2 power, 0.24, applied as L2 feedback. It also showed R2 changing between weapon and feedback effects while aiming, and both triggers turning off after aiming stopped. With the fire gate, the handgun fired at 0.45–0.47 of R2 travel, just past its 0.44 click, and held fire below it.
 
 The archive layout and path hash were cross-checked against [REE.PAK.Tool](https://github.com/Ekey/REE.PAK.Tool). The feedback object fields were cross-checked against [RE_RSZ](https://github.com/alphazolam/RE_RSZ/blob/main/rszre4.json).
+
+## License
+
+[GPL-3.0](LICENSE). You're welcome to adapt this for other games, such as the RE2 and RE3 remakes. If you share a modified version, release it under GPL-3.0 with its source code. This license covers only this project's code and docs, not Capcom's game or its data.
