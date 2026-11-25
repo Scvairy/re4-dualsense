@@ -1,11 +1,29 @@
-# RE4 Bluetooth haptics helper
+# RE4 haptics helper
 
 Build from the repository root with `haptics/build.sh`. The release executable is
 `haptics/.build/release/re4-haptics`. It requires macOS 15 or later, Swift 6 to
-build, and Input Monitoring permission for the launching terminal or app. The
-helper opens the first available Bluetooth DualSense or DualSense Edge in shared,
-output-only mode. GameController can still read it, and the helper does not
-subscribe to input reports.
+build, and Input Monitoring permission for the launching terminal or app.
+
+## USB output
+
+When exactly one DualSense or DualSense Edge is plugged in, the helper plays
+tracks through the controller's 4-channel USB audio device. Channels 1 and 2
+(speaker) stay silent, and channels 3 and 4 carry the left and right actuators
+at 48 kHz with a 128-frame device buffer. The helper finds the HID device at
+the same USB location and sends an all-zero output report `0x02`. That clears
+macOS's emulated-rumble flags and leaves the lights, triggers and audio
+settings unchanged. It sends the report again about 15 ms after each
+OutputTouched message. The approach follows
+[nxnative PR #1993](https://github.com/seedds/nxnative/pull/1993). The helper
+checks for the USB device once a second and prefers it over Bluetooth.
+PlayTrack and Trigger messages play over USB. PCM messages (type 1) are
+Bluetooth only.
+
+## Bluetooth output
+
+Without a wired controller, the helper opens the first available Bluetooth
+DualSense or DualSense Edge in shared, output-only mode. GameController can
+still read it, and the helper doesn't subscribe to input reports.
 
 ## HD haptics
 

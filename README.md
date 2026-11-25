@@ -31,18 +31,20 @@ On PS5, shots, reloads, footsteps, parries, and hits play as waveform tracks on 
    ```
 
    This needs Swift 6 (Xcode 16 or later) and Python 3.14 or later. The tracks and their lookup table stay in `haptics/` and are never committed.
-2. Connect the DualSense over **Bluetooth**. USB doesn't carry haptics on macOS.
+2. Connect the DualSense with a **USB cable** for the best result, or over Bluetooth.
 3. Run the launcher as usual. The first time, macOS asks for **Input Monitoring** permission for Terminal, which the helper needs to talk to the controller.
 
 When the helper is built, the launcher starts it next to the game and mutes the game's Core Haptics rumble. If it isn't built, the game keeps its normal rumble. To play with normal rumble anyway, run `RE4_DUALSENSE_HD_HAPTICS=0 ./launch.command`.
 
-**Game Mode.** macOS Game Mode doubles the controller's Bluetooth traffic, and in testing the helper's reports stalled much sooner with it on. The launcher turns Game Mode off for the session with Xcode's `gamepolicyctl` and restores the previous setting when the game quits. Without Xcode, turn Game Mode off from its menu bar item after the game starts.
+**USB or Bluetooth.** Over USB, the DualSense is also a 4-channel audio device, and channels 3 and 4 drive its actuators. The helper plays the full 48 kHz waveform there with an audio buffer of about 3 ms. First it sends an all-zero output report `0x02`, which takes the controller out of macOS's emulated-rumble mode. Without that report, the controller ignores those channels. The approach comes from [nxnative PR #1993](https://github.com/seedds/nxnative/pull/1993). Over Bluetooth, the helper streams a 3 kHz version in report `0x32` instead, with the limits described below. The helper picks USB whenever a wired DualSense is present.
+
+**Game Mode.** Over Bluetooth, macOS Game Mode doubles the controller's traffic, and in testing the helper's reports stalled much sooner with it on. When the controller isn't plugged in, the launcher turns Game Mode off for the session with Xcode's `gamepolicyctl` and restores the previous setting when the game quits. Without Xcode, turn Game Mode off from its menu bar item after the game starts.
 
 ### How it works
 
-Every game vibration goes through one script method, `soundlib.SoundVibrationManager.triggerVibration`, with a 32-bit trigger hash. The game's vibration definitions map each hash to a track (`.vsrc`) and a volume. There are 835 definitions across 245 data files, covering 197 tracks. The launcher hooks that method and sends each hash to the helper through a pipe. The game is sandboxed and can't open the controller itself. The helper looks up the track and streams it to the controller in Bluetooth report `0x32`, using [Tactile](https://github.com/theisegoria/tactile). See [haptics/README.md](haptics/README.md) for the protocol.
+Every game vibration goes through one script method, `soundlib.SoundVibrationManager.triggerVibration`, with a 32-bit trigger hash. The game's vibration definitions map each hash to a track (`.vsrc`) and a volume. There are 835 definitions across 245 data files, covering 197 tracks. The launcher hooks that method and sends each hash to the helper through a pipe. The game is sandboxed and can't open the controller itself. The helper looks up the track and plays it through the controller's USB audio channels, or streams it in Bluetooth report `0x32` using [Tactile](https://github.com/theisegoria/tactile). See [haptics/README.md](haptics/README.md) for the protocol.
 
-macOS completes only about 40 Bluetooth output reports per second, at about 22 ms per write. The helper packs 64 samples per report, which works out to about 47 reports per second, so roughly 70% of each waveform arrives. A new effect reaches the controller about 27 ms after the game triggers it on average, and up to about 80 ms in the worst cases.
+Over Bluetooth, macOS completes only about 40 output reports per second, at about 22 ms per write. The helper packs 64 samples per report, which works out to about 47 reports per second, so roughly 70% of each waveform arrives. A new effect reaches the controller about 27 ms after the game triggers it on average, and up to about 80 ms in the worst cases.
 
 ## How weapon profiles reach the controller
 
@@ -93,7 +95,7 @@ The PAK contains 13 entries. Each entry matches an existing Mac resource path an
 
 On macOS 27.2.1 with a Bluetooth DualSense, a gameplay test with F8 off confirmed resistance on both triggers that changed with the equipped weapon. The trace showed the handgun's retuned L2 power, 0.24, applied as L2 feedback. It also showed R2 changing between weapon and feedback effects while aiming, and both triggers turning off after aiming stopped. With the fire gate, the handgun fired at 0.45–0.47 of R2 travel, just past its 0.44 click, and held fire below it.
 
-HD haptics were tested in a 4-minute gameplay session over Bluetooth on the same setup. Shots, reloads, footsteps, and hits came through for the whole session, slightly delayed. The helper sent 1,557 reports with one stalled write and no input queue overflow.
+HD haptics were tested in a 4-minute gameplay session over Bluetooth on the same setup. Shots, reloads, footsteps, and hits came through for the whole session, slightly delayed. The helper sent 1,557 reports with one stalled write and no input queue overflow. Over USB, a gameplay session played 122 triggers through the audio channels with no errors, and the player found it stronger and more detailed than Bluetooth.
 
 The archive layout and path hash were cross-checked against [REE.PAK.Tool](https://github.com/Ekey/REE.PAK.Tool). The feedback object fields were cross-checked against [RE_RSZ](https://github.com/alphazolam/RE_RSZ/blob/main/rszre4.json).
 

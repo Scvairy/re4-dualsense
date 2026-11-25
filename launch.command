@@ -65,10 +65,13 @@ overlay="$build_dir/resource_overlay.dylib"
 # matching waveform to the DualSense over Bluetooth.
 helper="$project_dir/haptics/.build/release/re4-haptics"
 if [[ ${RE4_DUALSENSE_HD_HAPTICS:-1} != 0 && -x "$helper" && -r "$project_dir/haptics/triggers.tsv" ]]; then
-    # Game Mode doubles the controller's Bluetooth traffic, and the helper's
-    # reports stall much sooner while it's on. Turn it off for this session;
-    # the previous setting comes back when the launcher exits.
-    if [[ -x "$gamepolicy" ]]; then
+    # Over Bluetooth, Game Mode doubles the controller's traffic, and the
+    # helper's reports stall much sooner while it's on. Turn it off for this
+    # session; the previous setting comes back when the launcher exits.
+    # A controller on USB plays haptics through its audio channels instead.
+    if [[ $(/usr/sbin/ioreg -r -c IOUSBHostDevice -l) == *'"USB Product Name" = "DualSense'* ]]; then
+        :
+    elif [[ -x "$gamepolicy" ]]; then
         case $("$gamepolicy" game-mode status 2>/dev/null) in
             (*'currently automatic'*) game_mode_policy=auto ;;
             (*'forced always on'*) game_mode_policy=on ;;

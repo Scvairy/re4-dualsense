@@ -8,12 +8,13 @@ struct Track: Sendable {
     let side: Side
     var position = 0
 
-    static func load(_ url: URL, gain: Float, side: Side) throws -> Track {
+    static func load(_ url: URL, gain: Float, side: Side,
+                     sampleRate: Double = HapticsFormat.sampleRate) throws -> Track {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
         guard file.length > 0, (8_000...192_000).contains(format.sampleRate),
               (1...2).contains(format.channelCount),
-              let outputFormat = AVAudioFormat(standardFormatWithSampleRate: HapticsFormat.sampleRate,
+              let outputFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate,
                                                channels: format.channelCount),
               let converter = AVAudioConverter(from: format, to: outputFormat),
               let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096),

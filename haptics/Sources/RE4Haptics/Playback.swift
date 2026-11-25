@@ -24,6 +24,9 @@ final class Playback {
     private var pump: DoubleFramePump?
     private var warned: Set<String> = []
     private var waitingReported = false
+    private var usb: USBOutput?
+    private var usbRestorePending = false
+    private var nextUSBCheck = ContinuousClock.now
 
     init(catalog: TriggerCatalog, trace: Bool, restoreAudioMode: Bool = true,
          pcmPrefillBlocks: Int = 2, maxBacklog: Duration = .milliseconds(30)) {
@@ -111,7 +114,7 @@ final class Playback {
                 warnOnce("track", "ignored malformed PlayTrack frame")
                 return
             }
-            guard connection != nil, track.gain > 0 else { return }
+            guard connection != nil || usb != nil, track.gain > 0 else { return }
             playTrack(track.url, gain: track.gain, side: track.side)
         case 3 where frame.payload.isEmpty:
             stopAll()
@@ -131,10 +134,11 @@ final class Playback {
                 let scale = String(format: "%.4f", gain)
                 log("trigger \(hash) \(entry.path) gain=\(scale)")
             }
-            guard connection != nil else { return }
+            guard connection != nil || usb != nil else { return }
             playTrack(entry.url, gain: gain, side: .both, triggeredAt: receivedAt)
         case 5 where frame.payload.isEmpty:
             pump?.outputTouched()
+            scheduleUSBRestore()
         case 5:
             warnOnce("output-touched", "ignored OutputTouched frame with a payload")
         default:
@@ -143,6 +147,13 @@ final class Playback {
     }
 
     private func playTrack(_ url: URL, gain: Float, side: Side, triggeredAt: ContinuousClock.Instant? = nil) {
+        if let usb {
+            Task.detached(priority: .userInitiated) { [weak self] in
+                let result = Result { try Track.load(url, gain: gain, side: side, sampleRate: USBOutput.sampleRate) }
+                await self?.usbTrackLoaded(result, url: url, output: usb)
+            }
+            return
+        }
         guard let pump else { return }
         guard pump.voiceCount + loading.count < Self.maxTracks else {
             warnOnce("voices", "ignored PlayTrack because all track slots are in use")
@@ -152,6 +163,51 @@ final class Playback {
         loading[id] = Task.detached(priority: .userInitiated) { [weak self] in
             let result = Result { try Track.load(url, gain: gain, side: side) }
             await self?.trackLoaded(id, url: url, result: result, triggeredAt: triggeredAt)
+        }
+    }
+
+    private func usbTrackLoaded(_ result: Result<Track, any Error>, url: URL, output: USBOutput) {
+        guard usb === output else { return }
+        switch result {
+        case .success(let track):
+            output.play(track)
+        case .failure(let error):
+            warnOnce(url.path, "cannot play \(url.lastPathComponent): \(error.localizedDescription)")
+        }
+    }
+
+    // A trigger effect change from the game can put the controller back into
+    // emulated-rumble mode. Clear it again shortly afterwards.
+    private func scheduleUSBRestore() {
+        guard usb != nil, !usbRestorePending else { return }
+        usbRestorePending = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(15))
+            guard let self else { return }
+            self.usbRestorePending = false
+            self.usb?.enableAudioHaptics()
+        }
+    }
+
+    // Wired controllers play through their USB audio channels, which carry the
+    // full 48 kHz waveform with no Bluetooth report limit.
+    private func refreshUSB() {
+        let now = ContinuousClock.now
+        guard now >= nextUSBCheck else { return }
+        nextUSBCheck = now + .seconds(1)
+        let device = USBOutput.findDevice()
+        if let usb, usb.audioDevice != device {
+            usb.close()
+            self.usb = nil
+            log("USB DualSense disconnected")
+        }
+        guard usb == nil, let device else { return }
+        do {
+            usb = try USBOutput(device: device)
+            waitingReported = false
+            log("connected to DualSense over USB audio (48 kHz, channels 3-4)")
+        } catch {
+            warnOnce("usb", "USB haptics unavailable: \(error.localizedDescription)")
         }
     }
 
@@ -215,6 +271,7 @@ final class Playback {
         for task in loading.values { task.cancel() }
         loading.removeAll()
         pump?.stopAll()
+        usb?.stopAll()
     }
 
     private func disconnect() async {
@@ -227,6 +284,8 @@ final class Playback {
 
     func shutdown() async {
         let connection = self.connection
+        usb?.close()
+        usb = nil
         await disconnect()
         await connection?.neutralize()
     }
@@ -236,16 +295,19 @@ final class Playback {
     }
 
     func tick() {
+        refreshUSB()
         expirePCM(at: .now)
         fillOutput()
     }
 
     func reportStatus(trace: Bool) {
-        if connection == nil, !waitingReported {
-            log("waiting for a Bluetooth DualSense")
+        if connection == nil, usb == nil, !waitingReported {
+            log("waiting for a DualSense over USB or Bluetooth")
             waitingReported = true
         }
-        if trace, let pump {
+        if trace, let usb {
+            log(usb.metrics)
+        } else if trace, let pump {
             log(pump.metrics)
         }
     }
