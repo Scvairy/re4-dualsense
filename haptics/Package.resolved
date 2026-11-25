@@ -1,0 +1,14 @@
+{
+  "originHash" : "cfcb94699f9e7b49cc2ba466bca963b245296c0b77c42e7ddc53a83fc670bb7f",
+  "pins" : [
+    {
+      "identity" : "tactile",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/theisegoria/tactile.git",
+      "state" : {
+        "revision" : "160181f63f6a51f623aa1f6d5a45587ca2d5514c"
+      }
+    }
+  ],
+  "version" : 3
+}

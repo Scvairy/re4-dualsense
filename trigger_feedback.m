@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 #include "fire_gate.h"
+#include "hd_haptics.h"
 #include "native_profiles.h"
 
 typedef NS_ENUM(NSInteger, FeedbackSource) {
@@ -62,6 +63,7 @@ static void applyNativeEffect(GCDualSenseAdaptiveTrigger *trigger, const NativeT
         [trigger setModeVibrationWithStartPosition:v[0] amplitude:v[1] frequency:v[2]];
         break;
     }
+    hdHapticsOutputTouched();
 }
 
 static void updateDirectFeedback(GCDualSenseGamepad *gamepad, BOOL started) {
@@ -81,6 +83,7 @@ static void updateDirectFeedback(GCDualSenseGamepad *gamepad, BOOL started) {
         [gamepad.rightTrigger setModeOff];
         fireGateSet(nil, 0);
     }
+    hdHapticsOutputTouched();
     fireFeedbackEnabled = aiming;
 }
 
