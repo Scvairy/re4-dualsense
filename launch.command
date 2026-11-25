@@ -41,6 +41,8 @@ cleanup() {
     /bin/rm -rf -- "$build_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
+# Closing the Terminal window or stopping the launcher must also restore Game Mode.
+trap 'exit 1' HUP INT TERM
 if [[ $(/usr/bin/stat -f %d "$game_app") != $(/usr/bin/stat -f %d "$build_dir") ]]; then
     print -u2 'The game and the temporary directory must be on the same APFS volume.'
     exit 1
